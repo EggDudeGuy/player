@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Player</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        video, img {
+            max-width: 80%;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <h1>Media Viewer</h1>
+
+    <!-- Video player -->
+    <video controls>
+        <source src="sample.mp4" type="video/mp4">
+        <source src="sample.mov" type="video/quicktime">
+        Your browser does not support the video tag.
+    </video>
+
+    <!-- Images -->
+    <img src="image.jpg" alt="Sample JPG">
+    <img src="image.png" alt="Sample PNG">
+    <img src="image.gif" alt="Sample GIF">
+</body>
+</html>
