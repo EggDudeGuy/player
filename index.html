@@ -32,24 +32,29 @@
   button, input {
     padding: 6px;
   }
+
   #container {
     display: flex;
     justify-content: center;
+    gap: 20px;
     padding: 20px;
+    align-items: flex-start;
   }
+
   #frame {
-    resize: both;
-    overflow: auto;
+    overflow: hidden;
     border: 2px solid #888;
     width: 700px;
     height: 400px;
     background: black;
     position: relative;
   }
+
   video, img, iframe {
     width: 100%;
     height: 100%;
   }
+
   #controls {
     display: flex;
     gap: 10px;
@@ -57,9 +62,46 @@
     flex-wrap: wrap;
     padding: 10px;
   }
+
+  #seekBar {
+    width: 700px;
+    margin: 10px auto 0;
+    display: block;
+  }
+
+  #queue {
+    width: 250px;
+    height: 400px;
+    background: var(--panel);
+    border: 2px solid #888;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .queue-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    background: rgba(0,0,0,0.1);
+  }
+
+  .thumb {
+    width: 60px;
+    height: 40px;
+    object-fit: cover;
+    background: #000;
+    flex-shrink: 0;
+  }
+
 </style>
 </head>
 <body>
+  <div>
+    fwwfqgrewgregr
+  </div>
 
 <header>
   <input type="file" id="fileInput" multiple />
@@ -69,50 +111,158 @@
 </header>
 
 <div id="container">
-  <div id="frame">
-    <video id="video" controls style="display:none"></video>
-    <img id="image" style="display:none" />
-    <iframe id="yt" style="display:none" frameborder="0" allowfullscreen></iframe>
+  <div>
+    <div id="frame">
+      <video id="video" style="display:none"></video>
+      <img id="image" style="display:none" />
+      <iframe id="yt" style="display:none" frameborder="0" allowfullscreen></iframe>
+    </div>
+    <input type="range" id="seekBar" value="0" min="0" step="1" />
   </div>
+
+  <div id="queue"></div>
 </div>
 
 <div id="controls">
+  <button onclick="prevItem()">Prev</button>
   <button onclick="playPause()">Play/Pause</button>
   <button onclick="back10()">-10s</button>
   <button onclick="forward10()">+10s</button>
+  <button onclick="nextItem()">Next</button>
   <button onclick="downloadMedia()">Download</button>
 </div>
 
 <script>
-let currentVideo = document.getElementById('video');
-let currentImage = document.getElementById('image');
+let video = document.getElementById('video');
+let image = document.getElementById('image');
 let yt = document.getElementById('yt');
+let queue = [];
+let currentIndex = -1;
+let seekBar = document.getElementById('seekBar');
 
 function resetView() {
-  currentVideo.style.display = 'none';
-  currentImage.style.display = 'none';
+  video.style.display = 'none';
+  image.style.display = 'none';
   yt.style.display = 'none';
-  currentVideo.pause();
+  video.pause();
   yt.src = '';
 }
 
-// File loader
- document.getElementById('fileInput').addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+function extractYTId(url) {
+  try {
+    if (url.includes('youtu.be')) return url.split('/').pop();
+    return new URL(url).searchParams.get('v');
+  } catch {
+    return '';
+  }
+}
 
+function getThumbnail(item) {
+  if (item.type === 'image') return item.url;
+
+  if (item.type === 'yt') {
+    const id = extractYTId(item.raw || item.url);
+    return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
+  }
+
+  if (item.thumb) return item.thumb;
+  return '';
+}
+
+function addToQueue(item) {
+  queue.push(item);
+  renderQueue();
+}
+
+function renderQueue() {
+  const q = document.getElementById('queue');
+  q.innerHTML = '';
+
+  queue.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'queue-item';
+
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.src = getThumbnail(item);
+
+    const label = document.createElement('div');
+    label.textContent = item.name || 'Media';
+
+    div.appendChild(img);
+    div.appendChild(label);
+
+    div.onclick = () => playFromQueue(i);
+    q.appendChild(div);
+  });
+}
+
+function playFromQueue(i) {
+  currentIndex = i;
+  loadItem(queue[i]);
+}
+
+function loadItem(item) {
   resetView();
-  const url = URL.createObjectURL(file);
 
-  if (file.type.startsWith('video')) {
-    currentVideo.src = url;
-    currentVideo.style.display = 'block';
-    currentVideo.play();
-  } else if (file.type.startsWith('image')) {
-    currentImage.src = url;
-    currentImage.style.display = 'block';
-  } else {
-    alert('Unsupported file type');
+  if (item.type === 'video') {
+    video.src = item.url;
+    video.style.display = 'block';
+    video.play();
+
+    video.onloadedmetadata = () => {
+      seekBar.max = video.duration;
+    };
+
+    video.ontimeupdate = () => {
+      seekBar.value = video.currentTime;
+    };
+
+  } else if (item.type === 'image') {
+    image.src = item.url;
+    image.style.display = 'block';
+
+  } else if (item.type === 'yt') {
+    yt.src = item.url;
+    yt.style.display = 'block';
+  }
+}
+
+seekBar.oninput = () => {
+  if (video.style.display === 'block') {
+    video.currentTime = seekBar.value;
+  }
+};
+
+function nextItem() {
+  if (currentIndex < queue.length - 1) {
+    playFromQueue(currentIndex + 1);
+  }
+}
+
+function prevItem() {
+  if (currentIndex > 0) {
+    playFromQueue(currentIndex - 1);
+  }
+}
+
+// File input
+ document.getElementById('fileInput').addEventListener('change', function(e) {
+  const files = Array.from(e.target.files);
+
+  files.forEach(file => {
+    const url = URL.createObjectURL(file);
+
+    if (file.type.startsWith('video')) {
+      // temporary thumb from video (lazy)
+      addToQueue({ type: 'video', url, name: file.name, raw: file.name });
+    } else if (file.type.startsWith('image')) {
+      addToQueue({ type: 'image', url, name: file.name });
+    }
+  });
+
+  if (queue.length && currentIndex === -1) {
+    playFromQueue(0);
   }
 });
 
@@ -120,62 +270,46 @@ function loadURL() {
   const url = document.getElementById('urlInput').value;
   if (!url) return;
 
-  resetView();
-
   if (url.includes('youtube.com') || url.includes('youtu.be')) {
-    let videoId = '';
-    if (url.includes('youtu.be')) {
-      videoId = url.split('/').pop();
-    } else {
-      const u = new URL(url);
-      videoId = u.searchParams.get('v');
-    }
-    yt.src = `https://www.youtube.com/embed/${videoId}`;
-    yt.style.display = 'block';
-  } else if (url.match(/\.(mp4|webm|ogg|mov)/i)) {
-    currentVideo.src = url;
-    currentVideo.style.display = 'block';
-    currentVideo.play();
+    const id = extractYTId(url);
+    addToQueue({ type: 'yt', url: `https://www.youtube.com/embed/${id}`, name: url, raw: url });
+
+  } else if (url.match(/\.(mp4|mov|webm)/i)) {
+    addToQueue({ type: 'video', url, name: url });
+
   } else if (url.match(/\.(png|jpg|jpeg|gif)/i)) {
-    currentImage.src = url;
-    currentImage.style.display = 'block';
-  } else {
-    alert('Unsupported URL');
+    addToQueue({ type: 'image', url, name: url });
   }
+
+  if (currentIndex === -1) playFromQueue(0);
 }
 
 function playPause() {
-  if (currentVideo.style.display === 'block') {
-    if (currentVideo.paused) currentVideo.play();
-    else currentVideo.pause();
+  if (video.style.display === 'block') {
+    if (video.paused) video.play();
+    else video.pause();
   }
 }
 
 function back10() {
-  if (currentVideo.style.display === 'block') {
-    currentVideo.currentTime = Math.max(0, currentVideo.currentTime - 10);
-  }
+  if (video.style.display === 'block') video.currentTime = Math.max(0, video.currentTime - 10);
 }
 
 function forward10() {
-  if (currentVideo.style.display === 'block') {
-    currentVideo.currentTime += 10;
-  }
+  if (video.style.display === 'block') video.currentTime += 10;
 }
 
 function downloadMedia() {
-  if (currentVideo.style.display === 'block') {
+  if (video.style.display === 'block') {
     const a = document.createElement('a');
-    a.href = currentVideo.src;
+    a.href = video.src;
     a.download = 'video';
     a.click();
-  } else if (currentImage.style.display === 'block') {
+  } else if (image.style.display === 'block') {
     const a = document.createElement('a');
-    a.href = currentImage.src;
+    a.href = image.src;
     a.download = 'image';
     a.click();
-  } else {
-    alert('Nothing to download');
   }
 }
 
@@ -186,3 +320,4 @@ function toggleDark() {
 
 </body>
 </html>
+
