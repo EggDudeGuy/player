@@ -2,430 +2,185 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Media Player Pro (Fixed)</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Local Media Player</title>
 <style>
-:root {
-    --bg: #f2f2f2;
-    --card: #ffffff;
+  :root {
+    --bg: #ffffff;
     --text: #111;
-    --accent: #4a90e2;
-}
-
-body.dark {
+    --panel: #f2f2f2;
+  }
+  body.dark {
     --bg: #121212;
-    --card: #1e1e1e;
-    --text: #eee;
-}
-
-body {
+    --text: #f5f5f5;
+    --panel: #1e1e1e;
+  }
+  body {
     margin: 0;
-    font-family: Arial;
+    font-family: Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-}
-
-video, img {
-    width: 70%;
-    max-width: 900px;
-    border-radius: 10px;
-    background: black;
-}
-
-/* TIMELINE */
-.timeline {
-    width: 70%;
-    max-width: 900px;
-    height: 10px;
-    background: #444;
-    margin-top: 10px;
-    border-radius: 5px;
-    position: relative;
-    cursor: pointer;
-}
-
-.progress {
-    height: 100%;
-    width: 0%;
-    background: var(--accent);
-    border-radius: 5px;
-}
-
-/* CONTROLS */
-.controls {
+  }
+  header {
+    padding: 10px;
     display: flex;
     gap: 10px;
+    align-items: center;
+    background: var(--panel);
     flex-wrap: wrap;
-    margin-top: 10px;
+  }
+  button, input {
+    padding: 6px;
+  }
+  #container {
+    display: flex;
     justify-content: center;
-}
-
-button, input {
-    padding: 8px;
-}
-
-/* QUEUE */
-#queue {
-    margin-top: 20px;
-    width: 80%;
-    max-width: 500px;
-    background: var(--card);
+    padding: 20px;
+  }
+  #frame {
+    resize: both;
+    overflow: auto;
+    border: 2px solid #888;
+    width: 700px;
+    height: 400px;
+    background: black;
+    position: relative;
+  }
+  video, img, iframe {
+    width: 100%;
+    height: 100%;
+  }
+  #controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
     padding: 10px;
-    border-radius: 10px;
-}
-
-.item {
-    padding: 6px;
-    border-bottom: 1px solid #555;
-    cursor: pointer;
-}
-
-.active {
-    background: var(--accent);
-    color: white;
-}
-
-/* SCRUB PREVIEW */
-#scrubPreview {
-    position: absolute;
-    display: none;
-    pointer-events: none;
-    background: rgba(0,0,0,0.85);
-    color: white;
-    padding: 6px;
-    border-radius: 8px;
-    font-size: 12px;
-    z-index: 10;
-}
+  }
 </style>
 </head>
-
 <body>
 
-<h2>Media Player Pro</h2>
+<header>
+  <input type="file" id="fileInput" multiple />
+  <input type="text" id="urlInput" placeholder="Paste video/image/YouTube URL" style="flex:1" />
+  <button onclick="loadURL()">Load URL</button>
+  <button onclick="toggleDark()">Dark Mode</button>
+</header>
 
-<!-- INPUTS -->
-<div class="controls">
-    <input type="file" id="fileInput" accept="video/*,image/*" multiple>
-    <input type="text" id="urlInput" placeholder="Paste video/image URL">
-    <button onclick="addUrl()">Add URL</button>
+<div id="container">
+  <div id="frame">
+    <video id="video" controls style="display:none"></video>
+    <img id="image" style="display:none" />
+    <iframe id="yt" style="display:none" frameborder="0" allowfullscreen></iframe>
+  </div>
 </div>
 
-<button onclick="toggleDark()">🌙 Dark Mode</button>
-
-<!-- DISPLAY -->
-<video id="video"></video>
-<img id="image" style="display:none;">
-
-<!-- TIMELINE -->
-<div class="timeline" id="timeline">
-    <div class="progress" id="progress"></div>
+<div id="controls">
+  <button onclick="playPause()">Play/Pause</button>
+  <button onclick="back10()">-10s</button>
+  <button onclick="forward10()">+10s</button>
+  <button onclick="downloadMedia()">Download</button>
 </div>
-
-<!-- CONTROLS -->
-<div class="controls">
-    <button onclick="togglePlay()">Play/Pause</button>
-    <button onclick="skip(-10)">⏪ 10s</button>
-    <button onclick="skip(10)">10s ⏩</button>
-    <button onclick="prev()">Prev</button>
-    <button onclick="next()">Next</button>
-    <button onclick="downloadCurrent()">⬇ Download</button>
-</div>
-
-<!-- QUEUE -->
-<div id="queue"></div>
-
-<!-- GIF -->
-<h3>GIF Tool</h3>
-<button onclick="setStart()">Set Start</button>
-<button onclick="setEnd()">Set End</button>
-<button onclick="previewGif()">Preview GIF</button>
-<button onclick="exportGif()">Export GIF</button>
-
-<p id="gifInfo">Start: 0 | End: 0</p>
-
-<canvas id="gifCanvas" width="480" height="270" style="display:none;"></canvas>
-<img id="gifPreview" style="max-width:300px; display:none; border-radius:10px;">
-
-<!-- SCRUB PREVIEW -->
-<div id="scrubPreview">0:00</div>
-
-<script src="https://cdn.jsdelivr.net/npm/gif.js.optimized/dist/gif.js"></script>
 
 <script>
-const fileInput = document.getElementById("fileInput");
-const urlInput = document.getElementById("urlInput");
-const video = document.getElementById("video");
-const img = document.getElementById("image");
-const queueDiv = document.getElementById("queue");
-const timeline = document.getElementById("timeline");
-const progress = document.getElementById("progress");
-const scrubPreview = document.getElementById("scrubPreview");
+let currentVideo = document.getElementById('video');
+let currentImage = document.getElementById('image');
+let yt = document.getElementById('yt');
 
-const gifCanvas = document.getElementById("gifCanvas");
-const gifCtx = gifCanvas.getContext("2d");
-const gifPreview = document.getElementById("gifPreview");
-
-let queue = [];
-let index = -1;
-
-let gifStart = 0;
-let gifEnd = 0;
-
-let isScrubbing = false;
-const tempVideo = document.createElement("video");
-tempVideo.preload = "auto";
-
-/* ---------------- QUEUE ---------------- */
-fileInput.addEventListener("change", e => {
-    for (const f of e.target.files) {
-        queue.push({
-            name: f.name,
-            type: f.type,
-            url: URL.createObjectURL(f)
-        });
-    }
-    renderQueue();
-    if (index === -1) play(0);
-});
-
-/* ---------------- URL SUPPORT ---------------- */
-function addUrl() {
-    const url = urlInput.value.trim();
-    if (!url) return;
-
-    const type = url.match(/\.(mp4|webm|mov)/i) ? "video" : "image";
-
-    queue.push({
-        name: url,
-        type,
-        url
-    });
-
-    urlInput.value = "";
-    renderQueue();
-    if (index === -1) play(0);
+function resetView() {
+  currentVideo.style.display = 'none';
+  currentImage.style.display = 'none';
+  yt.style.display = 'none';
+  currentVideo.pause();
+  yt.src = '';
 }
 
-/* ---------------- PLAY ---------------- */
-function play(i) {
-    if (!queue.length) return;
-    if (!queue[i]) return;
+// File loader
+ document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    index = i;
-    const item = queue[i];
+  resetView();
+  const url = URL.createObjectURL(file);
 
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
+  if (file.type.startsWith('video')) {
+    currentVideo.src = url;
+    currentVideo.style.display = 'block';
+    currentVideo.play();
+  } else if (file.type.startsWith('image')) {
+    currentImage.src = url;
+    currentImage.style.display = 'block';
+  } else {
+    alert('Unsupported file type');
+  }
+});
 
-    video.style.display = "none";
-    img.style.display = "none";
+function loadURL() {
+  const url = document.getElementById('urlInput').value;
+  if (!url) return;
 
-    if (item.type.startsWith("image")) {
-        img.src = item.url;
-        img.style.display = "block";
+  resetView();
+
+  if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    let videoId = '';
+    if (url.includes('youtu.be')) {
+      videoId = url.split('/').pop();
     } else {
-        video.src = item.url;
-        video.style.display = "block";
-        video.load();
-        video.play();
+      const u = new URL(url);
+      videoId = u.searchParams.get('v');
     }
-
-    renderQueue();
+    yt.src = `https://www.youtube.com/embed/${videoId}`;
+    yt.style.display = 'block';
+  } else if (url.match(/\.(mp4|webm|ogg|mov)/i)) {
+    currentVideo.src = url;
+    currentVideo.style.display = 'block';
+    currentVideo.play();
+  } else if (url.match(/\.(png|jpg|jpeg|gif)/i)) {
+    currentImage.src = url;
+    currentImage.style.display = 'block';
+  } else {
+    alert('Unsupported URL');
+  }
 }
 
-function next() { if (index + 1 < queue.length) play(index + 1); }
-function prev() { if (index - 1 >= 0) play(index - 1); }
-
-/* ---------------- CONTROLS ---------------- */
-function togglePlay() {
-    if (!video.src) return;
-    video.paused ? video.play() : video.pause();
+function playPause() {
+  if (currentVideo.style.display === 'block') {
+    if (currentVideo.paused) currentVideo.play();
+    else currentVideo.pause();
+  }
 }
 
-function skip(sec) {
-    if (!video.duration) return;
-    video.currentTime += sec;
+function back10() {
+  if (currentVideo.style.display === 'block') {
+    currentVideo.currentTime = Math.max(0, currentVideo.currentTime - 10);
+  }
 }
 
-/* ---------------- DOWNLOAD ---------------- */
-function downloadCurrent() {
-    const item = queue[index];
-    if (!item) return;
+function forward10() {
+  if (currentVideo.style.display === 'block') {
+    currentVideo.currentTime += 10;
+  }
+}
 
-    const a = document.createElement("a");
-    a.href = item.url;
-    a.download = item.name || "media";
+function downloadMedia() {
+  if (currentVideo.style.display === 'block') {
+    const a = document.createElement('a');
+    a.href = currentVideo.src;
+    a.download = 'video';
     a.click();
+  } else if (currentImage.style.display === 'block') {
+    const a = document.createElement('a');
+    a.href = currentImage.src;
+    a.download = 'image';
+    a.click();
+  } else {
+    alert('Nothing to download');
+  }
 }
 
-/* ---------------- TIMELINE ---------------- */
-video.addEventListener("timeupdate", () => {
-    if (!video.duration) return;
-    progress.style.width = (video.currentTime / video.duration) * 100 + "%";
-});
-
-function getTime(e) {
-    const rect = timeline.getBoundingClientRect();
-    const p = (e.clientX - rect.left) / rect.width;
-    return p * video.duration;
-}
-
-timeline.addEventListener("mousedown", e => {
-    isScrubbing = true;
-    seek(e);
-});
-
-window.addEventListener("mousemove", e => {
-    showScrub(e);
-    if (isScrubbing) seek(e);
-});
-
-window.addEventListener("mouseup", () => {
-    isScrubbing = false;
-    scrubPreview.style.display = "none";
-});
-
-function seek(e) {
-    if (!video.duration) return;
-    video.currentTime = getTime(e);
-}
-
-/* ---------------- SCRUB PREVIEW FIXED ---------------- */
-function showScrub(e) {
-    if (!video.duration) return;
-
-    const time = getTime(e);
-
-    scrubPreview.style.display = "block";
-    scrubPreview.style.left = e.pageX + 10 + "px";
-    scrubPreview.style.top = e.pageY - 40 + "px";
-    scrubPreview.textContent = format(time);
-
-    tempVideo.src = video.src;
-
-    tempVideo.addEventListener("loadedmetadata", () => {
-        tempVideo.currentTime = time;
-    });
-
-    tempVideo.addEventListener("seeked", () => {
-        const c = document.createElement("canvas");
-        c.width = 160;
-        c.height = 90;
-        const ctx = c.getContext("2d");
-
-        ctx.drawImage(tempVideo, 0, 0, 160, 90);
-
-        scrubPreview.innerHTML = format(time) + "<br>";
-        scrubPreview.appendChild(c);
-    }, { once: true });
-}
-
-function format(t) {
-    const m = Math.floor(t / 60);
-    const s = Math.floor(t % 60);
-    return `${m}:${s.toString().padStart(2,"0")}`;
-}
-
-/* ---------------- QUEUE UI ---------------- */
-function renderQueue() {
-    queueDiv.innerHTML = "<h3>Queue</h3>";
-
-    queue.forEach((item, i) => {
-        const div = document.createElement("div");
-        div.className = "item";
-        if (i === index) div.classList.add("active");
-
-        div.textContent = item.name;
-        div.onclick = () => play(i);
-
-        queueDiv.appendChild(div);
-    });
-}
-
-/* ---------------- DARK MODE ---------------- */
 function toggleDark() {
-    document.body.classList.toggle("dark");
-}
-
-/* ---------------- GIF ---------------- */
-function setStart() {
-    gifStart = video.currentTime;
-    updateGif();
-}
-
-function setEnd() {
-    gifEnd = video.currentTime;
-    updateGif();
-}
-
-function updateGif() {
-    document.getElementById("gifInfo").textContent =
-        `Start: ${gifStart.toFixed(1)} | End: ${gifEnd.toFixed(1)}`;
-}
-
-function previewGif() {
-    if (gifEnd <= gifStart) return alert("Invalid range");
-
-    gifPreview.style.display = "block";
-    let frames = [];
-
-    video.pause();
-    video.currentTime = gifStart;
-
-    const step = 0.3;
-
-    function capture() {
-        if (video.currentTime >= gifEnd) {
-            buildGif(frames);
-            return;
-        }
-
-        gifCtx.drawImage(video, 0, 0, 480, 270);
-        frames.push(gifCanvas.toDataURL("image/png"));
-
-        video.currentTime += step;
-        setTimeout(capture, 80);
-    }
-
-    capture();
-}
-
-function buildGif(frames) {
-    const gif = new GIF({
-        workers: 2,
-        quality: 10,
-        width: 480,
-        height: 270
-    });
-
-    frames.forEach(f => {
-        const img = new Image();
-        img.src = f;
-        gif.addFrame(img, { delay: 100 });
-    });
-
-    gif.on("finished", blob => {
-        const url = URL.createObjectURL(blob);
-        gifPreview.src = url;
-
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "clip.gif";
-        a.click();
-    });
-
-    gif.render();
-}
-
-function exportGif() {
-    previewGif();
+  document.body.classList.toggle('dark');
 }
 </script>
 
