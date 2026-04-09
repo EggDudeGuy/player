@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Advanced Media Player Pro</title>
+<title>Media Player Pro (Fixed)</title>
 
 <style>
 :root {
@@ -100,7 +100,6 @@ button, input {
     padding: 6px;
     border-radius: 8px;
     font-size: 12px;
-    text-align: center;
     z-index: 10;
 }
 </style>
@@ -108,12 +107,18 @@ button, input {
 
 <body>
 
-<h2>Advanced Media Player</h2>
+<h2>Media Player Pro</h2>
 
-<input type="file" id="fileInput" accept="video/*,image/*" multiple>
+<!-- INPUTS -->
+<div class="controls">
+    <input type="file" id="fileInput" accept="video/*,image/*" multiple>
+    <input type="text" id="urlInput" placeholder="Paste video/image URL">
+    <button onclick="addUrl()">Add URL</button>
+</div>
 
 <button onclick="toggleDark()">🌙 Dark Mode</button>
 
+<!-- DISPLAY -->
 <video id="video"></video>
 <img id="image" style="display:none;">
 
@@ -129,8 +134,10 @@ button, input {
     <button onclick="skip(10)">10s ⏩</button>
     <button onclick="prev()">Prev</button>
     <button onclick="next()">Next</button>
+    <button onclick="downloadCurrent()">⬇ Download</button>
 </div>
 
+<!-- QUEUE -->
 <div id="queue"></div>
 
 <!-- GIF -->
@@ -146,25 +153,19 @@ button, input {
 <img id="gifPreview" style="max-width:300px; display:none; border-radius:10px;">
 
 <!-- SCRUB PREVIEW -->
-<div id="scrubPreview">
-    <div id="scrubTime">0:00</div>
-    <canvas id="scrubCanvas" width="160" height="90"></canvas>
-</div>
+<div id="scrubPreview">0:00</div>
 
 <script src="https://cdn.jsdelivr.net/npm/gif.js.optimized/dist/gif.js"></script>
 
 <script>
 const fileInput = document.getElementById("fileInput");
+const urlInput = document.getElementById("urlInput");
 const video = document.getElementById("video");
 const img = document.getElementById("image");
 const queueDiv = document.getElementById("queue");
 const timeline = document.getElementById("timeline");
 const progress = document.getElementById("progress");
-
 const scrubPreview = document.getElementById("scrubPreview");
-const scrubTime = document.getElementById("scrubTime");
-const scrubCanvas = document.getElementById("scrubCanvas");
-const scrubCtx = scrubCanvas.getContext("2d");
 
 const gifCanvas = document.getElementById("gifCanvas");
 const gifCtx = gifCanvas.getContext("2d");
@@ -177,7 +178,8 @@ let gifStart = 0;
 let gifEnd = 0;
 
 let isScrubbing = false;
-let scrubLock = false;
+const tempVideo = document.createElement("video");
+tempVideo.preload = "auto";
 
 /* ---------------- QUEUE ---------------- */
 fileInput.addEventListener("change", e => {
@@ -192,15 +194,38 @@ fileInput.addEventListener("change", e => {
     if (index === -1) play(0);
 });
 
+/* ---------------- URL SUPPORT ---------------- */
+function addUrl() {
+    const url = urlInput.value.trim();
+    if (!url) return;
+
+    const type = url.match(/\.(mp4|webm|mov)/i) ? "video" : "image";
+
+    queue.push({
+        name: url,
+        type,
+        url
+    });
+
+    urlInput.value = "";
+    renderQueue();
+    if (index === -1) play(0);
+}
+
+/* ---------------- PLAY ---------------- */
 function play(i) {
+    if (!queue.length) return;
     if (!queue[i]) return;
+
     index = i;
+    const item = queue[i];
 
     video.pause();
+    video.removeAttribute("src");
+    video.load();
+
     video.style.display = "none";
     img.style.display = "none";
-
-    const item = queue[i];
 
     if (item.type.startsWith("image")) {
         img.src = item.url;
@@ -220,12 +245,24 @@ function prev() { if (index - 1 >= 0) play(index - 1); }
 
 /* ---------------- CONTROLS ---------------- */
 function togglePlay() {
-    if (video.paused) video.play();
-    else video.pause();
+    if (!video.src) return;
+    video.paused ? video.play() : video.pause();
 }
 
 function skip(sec) {
+    if (!video.duration) return;
     video.currentTime += sec;
+}
+
+/* ---------------- DOWNLOAD ---------------- */
+function downloadCurrent() {
+    const item = queue[index];
+    if (!item) return;
+
+    const a = document.createElement("a");
+    a.href = item.url;
+    a.download = item.name || "media";
+    a.click();
 }
 
 /* ---------------- TIMELINE ---------------- */
@@ -234,21 +271,20 @@ video.addEventListener("timeupdate", () => {
     progress.style.width = (video.currentTime / video.duration) * 100 + "%";
 });
 
-function getTimeFromX(e) {
+function getTime(e) {
     const rect = timeline.getBoundingClientRect();
-    const percent = (e.clientX - rect.left) / rect.width;
-    return Math.max(0, Math.min(percent * video.duration, video.duration));
+    const p = (e.clientX - rect.left) / rect.width;
+    return p * video.duration;
 }
 
-timeline.addEventListener("mousedown", (e) => {
+timeline.addEventListener("mousedown", e => {
     isScrubbing = true;
-    video.pause();
     seek(e);
 });
 
-window.addEventListener("mousemove", (e) => {
-    if (isScrubbing) seek(e);
+window.addEventListener("mousemove", e => {
     showScrub(e);
+    if (isScrubbing) seek(e);
 });
 
 window.addEventListener("mouseup", () => {
@@ -256,43 +292,45 @@ window.addEventListener("mouseup", () => {
     scrubPreview.style.display = "none";
 });
 
-timeline.addEventListener("click", seek);
-
 function seek(e) {
     if (!video.duration) return;
-    video.currentTime = getTimeFromX(e);
+    video.currentTime = getTime(e);
 }
 
-/* ---------------- SCRUB PREVIEW ---------------- */
+/* ---------------- SCRUB PREVIEW FIXED ---------------- */
 function showScrub(e) {
     if (!video.duration) return;
 
-    const time = getTimeFromX(e);
+    const time = getTime(e);
 
     scrubPreview.style.display = "block";
     scrubPreview.style.left = e.pageX + 10 + "px";
-    scrubPreview.style.top = e.pageY - 70 + "px";
+    scrubPreview.style.top = e.pageY - 40 + "px";
+    scrubPreview.textContent = format(time);
 
-    scrubTime.textContent = formatTime(time);
+    tempVideo.src = video.src;
 
-    if (!scrubLock) {
-        scrubLock = true;
+    tempVideo.addEventListener("loadedmetadata", () => {
+        tempVideo.currentTime = time;
+    });
 
-        const temp = document.createElement("video");
-        temp.src = video.src;
-        temp.currentTime = time;
+    tempVideo.addEventListener("seeked", () => {
+        const c = document.createElement("canvas");
+        c.width = 160;
+        c.height = 90;
+        const ctx = c.getContext("2d");
 
-        temp.addEventListener("seeked", () => {
-            scrubCtx.drawImage(temp, 0, 0, 160, 90);
-            scrubLock = false;
-        });
-    }
+        ctx.drawImage(tempVideo, 0, 0, 160, 90);
+
+        scrubPreview.innerHTML = format(time) + "<br>";
+        scrubPreview.appendChild(c);
+    }, { once: true });
 }
 
-function formatTime(t) {
+function format(t) {
     const m = Math.floor(t / 60);
     const s = Math.floor(t % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
+    return `${m}:${s.toString().padStart(2,"0")}`;
 }
 
 /* ---------------- QUEUE UI ---------------- */
@@ -319,21 +357,21 @@ function toggleDark() {
 /* ---------------- GIF ---------------- */
 function setStart() {
     gifStart = video.currentTime;
-    updateGifInfo();
+    updateGif();
 }
 
 function setEnd() {
     gifEnd = video.currentTime;
-    updateGifInfo();
+    updateGif();
 }
 
-function updateGifInfo() {
+function updateGif() {
     document.getElementById("gifInfo").textContent =
         `Start: ${gifStart.toFixed(1)} | End: ${gifEnd.toFixed(1)}`;
 }
 
 function previewGif() {
-    if (gifEnd <= gifStart) return alert("Set valid range");
+    if (gifEnd <= gifStart) return alert("Invalid range");
 
     gifPreview.style.display = "block";
     let frames = [];
@@ -349,7 +387,7 @@ function previewGif() {
             return;
         }
 
-        gifCtx.drawImage(video, 0, 0, gifCanvas.width, gifCanvas.height);
+        gifCtx.drawImage(video, 0, 0, 480, 270);
         frames.push(gifCanvas.toDataURL("image/png"));
 
         video.currentTime += step;
