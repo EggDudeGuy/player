@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Media Viewer</title>
+    <title>Media Viewer Pro</title>
 
     <style>
         body {
@@ -22,51 +22,98 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
 
-        input {
-            margin-top: 20px;
+        input, button {
+            margin-top: 10px;
+            padding: 8px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
     </style>
 </head>
 
 <body>
-    <h1>Media Viewer</h1>
 
-    <!-- 1. File input (THIS is what user clicks) -->
+    <h1>Media Viewer Pro</h1>
+
+    <!-- URL input -->
+    <div class="row">
+        <input type="text" id="urlInput" placeholder="Paste video URL here">
+        <button onclick="loadFromUrl()">Load URL</button>
+    </div>
+
+    <!-- File upload -->
     <input type="file" id="fileInput" accept="video/*,image/*">
 
-    <!-- 2. Display areas -->
+    <!-- Download button -->
+    <button onclick="downloadVideo()">Download Current Video</button>
+
+    <!-- Display -->
     <video id="videoPlayer" controls style="display:none;"></video>
     <img id="imageDisplay" style="display:none;" />
 
-    <!-- 3. JavaScript (THIS makes it dynamic) -->
     <script>
         const input = document.getElementById("fileInput");
         const video = document.getElementById("videoPlayer");
         const img = document.getElementById("imageDisplay");
 
+        let currentMediaUrl = "";
+
+        // Handle file upload
         input.addEventListener("change", function () {
             const file = this.files[0];
             if (!file) return;
 
-            const url = URL.createObjectURL(file);
+            currentMediaUrl = URL.createObjectURL(file);
 
-            // If it's a video
-            if (file.type.startsWith("video/")) {
+            showMedia(file.type, currentMediaUrl);
+        });
+
+        // Load from URL
+        function loadFromUrl() {
+            const url = document.getElementById("urlInput").value.trim();
+            if (!url) return;
+
+            currentMediaUrl = url;
+
+            // assume video for simplicity
+            showMedia("video", url);
+        }
+
+        // Show image or video
+        function showMedia(type, url) {
+            if (type.startsWith("video") || type === "video") {
                 img.style.display = "none";
                 video.style.display = "block";
-
                 video.src = url;
                 video.load();
-            }
-
-            // If it's an image
-            else if (file.type.startsWith("image/")) {
+            } 
+            else if (type.startsWith("image")) {
                 video.style.display = "none";
                 img.style.display = "block";
-
                 img.src = url;
             }
-        });
+        }
+
+        // Download current video
+        function downloadVideo() {
+            if (!video.src) {
+                alert("No video loaded!");
+                return;
+            }
+
+            const a = document.createElement("a");
+            a.href = video.src;
+            a.download = "video.mp4"; // default name
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
     </script>
+
 </body>
 </html>
